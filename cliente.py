@@ -1,8 +1,20 @@
 import socket
 import os
+import threading
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import padding
-from criptografia import cifrar_mensagem
+from criptografia import cifrar_mensagem, decifrar_mensagem
+
+def receber_mensagens(client, session_key):
+    while True:
+        try:
+            data = client.recv(1024)
+            if not data: break
+            msg = decifrar_mensagem(data, session_key)
+            print(f"\n[Servidor]: {msg}\n> ", end="")
+        except Exception:
+            print("\n[Erro] Conexão encerrada pelo servidor.")
+            break
 
 def rodar_cliente():
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -18,14 +30,15 @@ def rodar_cliente():
             padding.OAEP(mgf=padding.MGF1(hashes.SHA256()), algorithm=hashes.SHA256(), label=None)
         )
         client.send(enc_key)
+        print("[!] Handshake concluído. Pode digitar.")
 
-        print("Chat iniciado. Digite 'sair' para encerrar.")
+        # Inicia thread para escutar o servidor
+        threading.Thread(target=receber_mensagens, args=(client, session_key), daemon=True).start()
+
         while True:
             texto = input("> ")
             if texto.lower() == 'sair': break
-            
-            pacote = cifrar_mensagem(texto, session_key)
-            client.send(pacote)
+            client.send(cifrar_mensagem(texto, session_key))
     finally:
         client.close()
 
