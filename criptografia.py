@@ -25,7 +25,7 @@ def decifrar_mensagem(dados, chave_sessao):
 
     h = hmac.HMAC(chave_sessao, hashes.SHA256())
     h.update(iv + ciphertext)
-    h.verify(received_hmac) # Levanta exceção se adulterado
+    h.verify(received_hmac)
 
     cipher = Cipher(algorithms.AES(chave_sessao), modes.CBC(iv))
     decryptor = cipher.decryptor()
