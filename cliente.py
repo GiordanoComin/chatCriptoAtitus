@@ -1,46 +1,41 @@
-import socket
-import os
-import threading
+import socket, threading, os
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 from criptografia import cifrar_mensagem, decifrar_mensagem
 
-def receber_mensagens(client, session_key):
+VERDE, AMARELO, RESET = "\033[92m", "\033[93m", "\033[0m"
+
+os.system('cls' if os.name == 'nt' else 'clear')
+
+def receber(client, key):
     while True:
         try:
             data = client.recv(1024)
             if not data: break
-            msg = decifrar_mensagem(data, session_key)
-            print(f"\n[Servidor]: {msg}\n> ", end="")
-        except Exception:
-            print("\n[Erro] Conexão encerrada pelo servidor.")
-            break
+            print(f"\n{VERDE}[CRIPTOGRAFADO]: {data.hex()[:32]}...{RESET}")
+            print(f"Descriptografando...")
+            msg = decifrar_mensagem(data, key)
+            print(f"{AMARELO}SERVIDOR:{RESET} {msg}\n> ", end="")
+        except: break
 
-def rodar_cliente():
+def iniciar():
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client.connect(('localhost', 5000))
 
-    try:
-        pub_data = client.recv(1024)
-        public_key = serialization.load_pem_public_key(pub_data)
-        
-        session_key = os.urandom(16)
-        enc_key = public_key.encrypt(
-            session_key,
-            padding.OAEP(mgf=padding.MGF1(hashes.SHA256()), algorithm=hashes.SHA256(), label=None)
-        )
-        client.send(enc_key)
-        print("[!] Handshake concluído. Pode digitar.")
+    # Handshake RSA [cite: 17, 25]
+    pub_key = serialization.load_pem_public_key(client.recv(1024))
+    session_key = os.urandom(16) # Chave 128 bits [cite: 26]
+    client.send(pub_key.encrypt(
+        session_key, padding.OAEP(mgf=padding.MGF1(hashes.SHA256()), algorithm=hashes.SHA256(), label=None)
+    ))
 
-        # Inicia thread para escutar o servidor
-        threading.Thread(target=receber_mensagens, args=(client, session_key), daemon=True).start()
+    print(f"{VERDE}=== CLIENTE DE CHAT CONECTADO ==={RESET}")
+    threading.Thread(target=receber, args=(client, session_key), daemon=True).start()
 
-        while True:
-            texto = input("> ")
-            if texto.lower() == 'sair': break
-            client.send(cifrar_mensagem(texto, session_key))
-    finally:
-        client.close()
+    while True:
+        txt = input("> ")
+        if txt.lower() == 'sair': break
+        client.send(cifrar_mensagem(txt, session_key))
 
 if __name__ == "__main__":
-    rodar_cliente()
+    iniciar()
