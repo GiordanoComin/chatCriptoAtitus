@@ -1,53 +1,65 @@
-import socket, threading, os
+import socket, threading, os, tkinter as tk
+from tkinter import scrolledtext
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 from criptografia import cifrar_mensagem, decifrar_mensagem
 
-VERDE, AMARELO, CIANO, RESET = "\033[92m", "\033[93m", "\033[96m", "\033[0m"
-os.system('cls' if os.name == 'nt' else 'clear')
+class ClienteGUI:
+    def __init__(self):
+        self.root = tk.Tk()
+        self.root.title("Cliente - Chat Seguro Atitus")
+        self.chat_area = scrolledtext.ScrolledText(self.root, state='disabled', height=20, width=50)
+        self.chat_area.pack(padx=10, pady=10)
+        
+        self.msg_entry = tk.Entry(self.root, width=40)
+        self.msg_entry.pack(side=tk.LEFT, padx=10, pady=10)
+        self.msg_entry.bind("<Return>", lambda e: self.enviar())
+        
+        self.send_btn = tk.Button(self.root, text="Enviar", command=self.enviar)
+        self.send_btn.pack(side=tk.RIGHT, padx=10)
 
-def receber(client, key):
-    while True:
+        self.session_key = os.urandom(16) # AES-128 bits [cite: 26]
+        self.client = None
+
+        threading.Thread(target=self.conectar, daemon=True).start()
+        self.root.mainloop()
+
+    def log(self, texto, cor="black"):
+        self.chat_area.config(state='normal')
+        self.chat_area.insert(tk.END, texto + "\n", cor)
+        self.chat_area.tag_config("verde", foreground="green")
+        self.chat_area.tag_config("laranja", foreground="orange")
+        self.chat_area.see(tk.END)
+        self.chat_area.config(state='disabled')
+
+    def conectar(self):
+        self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
-            data = client.recv(1024)
-            if not data: break
+            self.client.connect(('localhost', 5000))
+            pub_data = self.client.recv(1024)
+            public_key = serialization.load_pem_public_key(pub_data)
             
-            print(f"\r\033[K{VERDE}[DADOS CRIPTOGRAFADOS]: {data.hex()[:32]}...{RESET}")
-            print("descriptografando.....")
+            pacote_chave = public_key.encrypt(
+                self.session_key, 
+                padding.OAEP(mgf=padding.MGF1(hashes.SHA256()), algorithm=hashes.SHA256(), label=None)
+            )
+            self.client.send(pacote_chave)
+            self.log("[SUCESSO] Conectado e Seguro.", "verde")
             
-            msg = decifrar_mensagem(data, key)
-            print(f"\033[K{AMARELO}Server:{RESET} {msg}")
-            print(f"Digite sua mensagem: ", end="", flush=True)
+            while True:
+                data = self.client.recv(1024)
+                if not data: break
+                msg = decifrar_mensagem(data, self.session_key)
+                self.log(f"Server: {msg}")
         except:
-            print(f"\n{VERDE}[SISTEMA]{RESET} Conexão encerrada.")
-            break
+            self.log("[ERRO] Falha na conexão.", "verde")
 
-def iniciar():
-    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client.connect(('localhost', 5000))
-
-    pub_data = client.recv(1024)
-    public_key = serialization.load_pem_public_key(pub_data)
-    print(f"{CIANO}[INFO]{RESET} Chave Pública do servidor recebida.")
-    
-    session_key = os.urandom(16)
-    pacote_chave = public_key.encrypt(
-        session_key, 
-        padding.OAEP(mgf=padding.MGF1(hashes.SHA256()), algorithm=hashes.SHA256(), label=None)
-    )
-    
-    print(f"{VERDE}[CHAVE CRIPTOGRAFADA ENVIADA]:{RESET} {pacote_chave.hex()[:64]}...")
-    client.send(pacote_chave)
-
-    print(f"{CIANO}[SUCESSO]{RESET} Handshake concluído.")
-    threading.Thread(target=receber, args=(client, session_key), daemon=True).start()
-    
-    while True:
-        txt = input("Digite sua mensagem: ") 
-        if txt.lower() == 'sair': break
-        if txt.strip():
-            print(f"\033[A\033[KVocê: {txt}")
-            client.send(cifrar_mensagem(txt, session_key))
+    def enviar(self):
+        txt = self.msg_entry.get()
+        if txt and self.client:
+            self.log(f"Você: {txt}", "laranja")
+            self.client.send(cifrar_mensagem(txt, self.session_key))
+            self.msg_entry.delete(0, tk.END)
 
 if __name__ == "__main__":
-    iniciar()
+    ClienteGUI()
