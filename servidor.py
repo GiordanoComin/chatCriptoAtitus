@@ -18,7 +18,6 @@ class ServidorGUI:
         self.send_btn = tk.Button(self.root, text="Enviar", command=self.enviar)
         self.send_btn.pack(side=tk.RIGHT, padx=10)
 
-        # Configuração de Criptografia [cite: 17, 26]
         self.private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         self.pem_public = self.private_key.public_key().public_bytes(
             encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo
@@ -44,7 +43,7 @@ class ServidorGUI:
         self.log("Aguardando conexão do cliente...", "verde")
         
         self.conn, addr = server.accept()
-        self.conn.send(self.pem_public) # Envia chave pública [cite: 25]
+        self.conn.send(self.pem_public)
         
         pacote_chave = self.conn.recv(256)
         self.log(f"[CHAVE RECEBIDA]: {pacote_chave.hex()[:32]}...", "verde")
@@ -59,10 +58,10 @@ class ServidorGUI:
             try:
                 data = self.conn.recv(1024)
                 if not data: break
-                msg = decifrar_mensagem(data, self.session_key) # [cite: 27]
+                msg = decifrar_mensagem(data, self.session_key)
                 self.log(f"Cliente: {msg}")
             except:
-                self.log("[ALERTA] Erro de integridade!", "verde") # [cite: 28]
+                self.log("[ALERTA] Erro de integridade!", "verde")
                 break
 
     def enviar(self):

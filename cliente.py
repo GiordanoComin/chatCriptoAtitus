@@ -18,7 +18,7 @@ class ClienteGUI:
         self.send_btn = tk.Button(self.root, text="Enviar", command=self.enviar)
         self.send_btn.pack(side=tk.RIGHT, padx=10)
 
-        self.session_key = os.urandom(16) # AES-128 bits [cite: 26]
+        self.session_key = os.urandom(16)
         self.client = None
 
         threading.Thread(target=self.conectar, daemon=True).start()
